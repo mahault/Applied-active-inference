@@ -100,6 +100,60 @@ def get_dataloader(
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
 
 
+# Per-feature (min, max) ranges derived from the dataset.
+# Used by generate_random_shipment to sample in-distribution values.
+FEATURE_RANGES: dict[str, tuple[float, float]] = {
+    "vehicle_gps_latitude":           (30.0,    50.0),
+    "vehicle_gps_longitude":          (-120.0,  -70.0),
+    "fuel_consumption_rate":          (5.0,     20.0),
+    "eta_variation_hours":            (-2.0,     5.0),
+    "traffic_congestion_level":       (0.0,     10.0),
+    "warehouse_inventory_level":      (0.0,   1000.0),
+    "loading_unloading_time":         (0.5,      5.0),
+    "handling_equipment_availability": (0.0,      1.0),
+    "order_fulfillment_status":       (0.0,      1.0),
+    "weather_condition_severity":     (0.0,      1.0),
+    "port_congestion_level":          (0.0,     10.0),
+    "shipping_costs":                 (100.0, 1000.0),
+    "supplier_reliability_score":     (0.0,      1.0),
+    "lead_time_days":                 (1.0,     15.0),
+    "historical_demand":              (100.0, 10000.0),
+    "iot_temperature":                (-10.0,   40.0),
+    "cargo_condition_status":         (0.0,      1.0),
+    "route_risk_level":               (0.0,     10.0),
+    "customs_clearance_time":         (0.5,      5.0),
+    "driver_behavior_score":          (0.0,      1.0),
+    "fatigue_monitoring_score":       (0.0,      1.0),
+}
+
+
+def generate_random_shipment(n: int = 1, seed: int | None = None) -> dict[str, np.ndarray]:
+    """Generate *n* random shipments with in-distribution feature values.
+
+    Each feature is sampled uniformly between the observed min and max in the
+    training data.
+
+    Returns a dict mapping feature names to arrays of shape ``(n,)``.
+    """
+    rng = np.random.default_rng(seed)
+    shipment: dict[str, np.ndarray] = {}
+    for col in FEATURE_COLS:
+        lo, hi = FEATURE_RANGES[col]
+        shipment[col] = rng.uniform(lo, hi, size=n).astype(np.float32)
+    return shipment
+
+
+def generate_random_shipment_tensor(
+    n: int = 1,
+    seed: int | None = None,
+) -> torch.Tensor:
+    """Like ``generate_random_shipment`` but returns a ``(n, 21)`` tensor."""
+    shipment = generate_random_shipment(n=n, seed=seed)
+    return torch.from_numpy(
+        np.column_stack([shipment[col] for col in FEATURE_COLS])
+    )
+
+
 if __name__ == "__main__":
     loader = get_dataloader()
     features, targets = next(iter(loader))
