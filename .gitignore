@@ -1,0 +1,11 @@
+# IDE files
+.idea
+*.iml
+
+# Credentials
+kaggle.json
+
+# Build Files
+.venv
+uv.lock
+dist/

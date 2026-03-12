@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+classifiers = [
+  "Private :: DO NOT UPLOAD"
+]
+dependencies = [
+  "kagglehub"
+]
+
+[project]
+name = "applied-active-inference"
+version = "0.1.0"
+description = "Applied Active Inference experiments"
+requires-python = ">=3.9"
+authors = [
+  { name = "Mahault Albarracin", email = "Mahault.Albarracin@gmail.com" }
+]
+dependencies = []
+
+[tool.hatch.version]
+path = "src/applied_active_inference/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/applied_active_inference"]
