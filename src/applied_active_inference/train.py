@@ -32,11 +32,27 @@ class SupplyChainMLP(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
+        predictions = self.net(x)
+        return torch.concatenate((nn.functional.sigmoid(predictions[:, :2]),
+                                  predictions[:, 2:]), axis=-1)
 
 CHECKPOINT_DIR = Path("checkpoints")
 
+def combined_loss(predictions, targets, loss_weights):
+    prob_predictions = torch.stack((predictions[:, :2],
+                                    1 - predictions[:, :2]), dim=-1)
+    prob_targets = torch.stack((targets[:, :2], 1 - targets[:, :2]),
+                               dim=-1)
+    ce_loss = nn.CrossEntropyLoss(reduction="none")
+    per_target_ce = ce_loss(prob_predictions[:, 0], prob_targets[:, 0])
+    per_target_ce = torch.stack((per_target_ce,
+                                 ce_loss(prob_predictions[:, 1],
+                                         prob_targets[:, 1])),
+                                dim=-1).mean(dim=0)
+    per_target_mse = ((predictions[:, 2:] - targets[:, 2:]) ** 2).mean(dim=0)
+    loss = (per_target_ce * loss_weights[:2] +\
+            per_target_mse * loss_weights[2:]).mean()
+    return loss
 
 def train(
     epochs: int = 50,
@@ -83,8 +99,7 @@ def train(
         for features, targets in train_loader:
             features, targets = features.to(device), targets.to(device)
             optimizer.zero_grad()
-            per_target_mse = ((model(features) - targets) ** 2).mean(dim=0)
-            loss = (per_target_mse * loss_weights).mean()
+            loss = combined_loss(model(features), targets, loss_weights)
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * len(features)
@@ -96,8 +111,8 @@ def train(
         with torch.no_grad():
             for features, targets in val_loader:
                 features, targets = features.to(device), targets.to(device)
-                per_target_mse = ((model(features) - targets) ** 2).mean(dim=0)
-                val_loss += (per_target_mse * loss_weights).mean().item() * len(features)
+                loss = combined_loss(model(features), targets, loss_weights)
+                val_loss += loss.item() * len(features)
         val_loss /= val_size
 
         print(f"Epoch {epoch:3d}/{epochs}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
