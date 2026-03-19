@@ -9,3 +9,7 @@ kaggle.json
 .venv
 uv.lock
 dist/
+
+# Python
+*.pyc
+**/__pycache__/**

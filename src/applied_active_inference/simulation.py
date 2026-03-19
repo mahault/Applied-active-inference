@@ -266,3 +266,143 @@ def run_simulation(
         avg_inventory_level=avg_inventory,
         fill_rate=fill_rate,
     )
+
+
+def run_baseline_simulation(
+    df: pd.DataFrame,
+    category_fits: dict[str, FitResult],
+    config: SimulationConfig | None = None,
+) -> SimulationResults:
+    """Run a baseline simulation using the dataset's static reorder policy.
+
+    This represents the "existing system" embedded in the dataset: each SKU
+    has a fixed ``Reorder_Point`` and ``Safety_Stock`` drawn directly from the
+    data.  When on-hand stock falls to or below the reorder point, an order is
+    placed with the SKU's original supplier to restore stock to
+    ``Reorder_Point + Safety_Stock``.
+
+    No distribution fitting or supplier-reliability modelling is used —
+    lead time is taken as the recorded ``Lead_Time_Days`` with no stochastic
+    delay.  This is the naive, deterministic baseline the hypothesis is tested
+    against.
+
+    Parameters
+    ----------
+    df : cleaned grocery DataFrame.
+    category_fits : used only to generate consistent demand samples (same
+                    distributions as the statistical run so comparisons are fair).
+    config : simulation configuration.
+
+    Returns
+    -------
+    SimulationResults for the baseline policy.
+    """
+    if config is None:
+        config = SimulationConfig()
+
+    rng = np.random.default_rng(config.seed)
+
+    # ── Build SKU index (same filter as statistical run) ─────────────────
+    sku_rows = [
+        row for _, row in df.iterrows()
+        if row["Category"] in category_fits
+    ]
+    n_skus = len(sku_rows)
+
+    sku_ids: list[str] = [row["SKU_ID"] for row in sku_rows]
+    sku_categories: list[str] = [row["Category"] for row in sku_rows]
+
+    # Per-SKU static policy parameters from the dataset
+    reorder_points = np.array([float(row["Reorder_Point"]) for row in sku_rows])
+    safety_stocks = np.array([float(row["Safety_Stock"]) for row in sku_rows])
+    lead_times = np.array([int(row["Lead_Time_Days"]) for row in sku_rows])
+
+    # ── Pre-generate demand with the same seed so both runs see identical
+    #    demand — the only difference is the reorder policy. ───────────────
+    demand_matrix = np.zeros((n_skus, config.n_days), dtype=np.float32)
+    for i, cat in enumerate(sku_categories):
+        demand_matrix[i] = sample_daily_sales(category_fits[cat], config.n_days, rng)
+
+    # ── Initialise stock from dataset Quantity_On_Hand ────────────────────
+    stock = np.array(
+        [float(row["Quantity_On_Hand"]) for row in sku_rows], dtype=np.float32
+    )
+
+    inv_history = np.zeros((n_skus, config.n_days), dtype=np.float32)
+    sales_history = np.zeros((n_skus, config.n_days), dtype=np.float32)
+    stockout_history = np.zeros((n_skus, config.n_days), dtype=bool)
+
+    pending_orders: list[PendingOrder] = []
+    orders_log: list[dict] = []
+
+    for day in range(config.n_days):
+
+        # 1. RECEIVE
+        still_pending: list[PendingOrder] = []
+        for order in pending_orders:
+            if order.arrival_day <= day:
+                stock[order.sku_idx] += order.quantity
+            else:
+                still_pending.append(order)
+        pending_orders = still_pending
+
+        # 2. SELL — vectorised
+        demand_today = demand_matrix[:, day]
+        actual_sales = np.minimum(demand_today, stock)
+        stock -= actual_sales
+
+        inv_history[:, day] = stock
+        sales_history[:, day] = actual_sales
+        stockout_history[:, day] = actual_sales < demand_today
+
+        # 3. DECIDE — static reorder rule: reorder when stock <= reorder_point,
+        #    no pending order already in flight for this SKU.
+        skus_on_order = {o.sku_idx for o in pending_orders}
+        trigger = (stock <= reorder_points) & np.array(
+            [i not in skus_on_order for i in range(n_skus)]
+        )
+        reorder_idxs = np.where(trigger)[0]
+
+        for i in reorder_idxs:
+            # Order enough to reach reorder_point + safety_stock
+            target = reorder_points[i] + safety_stocks[i]
+            qty = max(1, int(np.ceil(target - stock[i])))
+
+            order = PendingOrder(
+                sku_idx=int(i),
+                sku_id=sku_ids[i],
+                supplier_id=str(sku_rows[i]["Supplier_ID"]),
+                quantity=qty,
+                # Deterministic lead time — no delay model
+                arrival_day=day + int(lead_times[i]),
+            )
+            pending_orders.append(order)
+
+            orders_log.append({
+                "day": day,
+                "sku_id": sku_ids[i],
+                "supplier_id": str(sku_rows[i]["Supplier_ID"]),
+                "quantity": qty,
+                "expected_arrival": order.arrival_day,
+                "actual_arrival": order.arrival_day,
+            })
+
+    daily_inventory = {sku_ids[i]: inv_history[i].tolist() for i in range(n_skus)}
+    daily_sales = {sku_ids[i]: sales_history[i].tolist() for i in range(n_skus)}
+    daily_stockouts = {sku_ids[i]: stockout_history[i].tolist() for i in range(n_skus)}
+
+    total_stockout_days = int(stockout_history.sum())
+    total_fulfilled = float(sales_history.sum())
+    total_demand = float(demand_matrix.sum())
+    fill_rate = total_fulfilled / total_demand if total_demand > 0 else 1.0
+
+    return SimulationResults(
+        daily_inventory=daily_inventory,
+        daily_sales=daily_sales,
+        daily_stockouts=daily_stockouts,
+        orders_placed=orders_log,
+        total_stockout_days=total_stockout_days,
+        total_orders_placed=len(orders_log),
+        avg_inventory_level=float(inv_history.mean()),
+        fill_rate=fill_rate,
+    )

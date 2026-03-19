@@ -28,5 +28,8 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "src/applied_active_inference/__init__.py"
 
+[project.scripts]
+inventory-test = "applied_active_inference.main:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/applied_active_inference"]
