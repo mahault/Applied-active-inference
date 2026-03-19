@@ -37,22 +37,22 @@ You need Kaggle credentials. Either:
 
 ## Results: Grocery Inventory AI
 
-Active inference agent vs classical reorder-point (s,Q) baseline across all 1000 SKUs,
+Proper active inference agent (VFE belief updating, KL-based EFE, softmax policy)
+vs classical reorder-point (s,Q) baseline across all 1000 SKUs,
 90-day simulation, 3 random seeds each.
 
 | Metric | Baseline | AI Agent | Delta |
 |--------|----------|----------|-------|
-| Fill rate | 60.9% | **65.2%** | +4.3pp |
-| Stockout days (of 90) | 35.2 | **31.3** | -3.9 |
-| Total orders placed | 85.5 | **50.3** | -41% |
-| Lost sales (units) | 828 | **733** | -11% |
-| Avg inventory (units) | 44 | 46 | +3% |
+| Fill rate | 60.9% | **65.4%** | +4.5pp |
+| Stockout days (of 90) | 35.2 | **31.1** | -4.1 |
+| Total orders placed | 85.5 | **48.0** | -44% |
+| Lost sales (units) | 828 | **727** | -12% |
+| Avg inventory (units) | 44 | 45 | +2% |
 
-- AI agent achieves better fill rate on **757 / 1000 SKUs**
-- Every product category sees improvement (+3.5 to +5.4 pp fill rate)
-- Largest gains: Frozen (+5.4pp), Bakery (+5.2pp)
+- AI agent achieves better fill rate on **826 / 1000 SKUs**
+- Every product category sees improvement (+3.5 to +5.5 pp fill rate)
 - AI orders proactively via EFE-based planning rather than reacting at a fixed threshold,
-  resulting in 41% fewer orders at higher service levels
+  resulting in 44% fewer orders at higher service levels
 
 ## Roadmap
 
@@ -62,13 +62,12 @@ Active inference agent vs classical reorder-point (s,Q) baseline across all 1000
       homeostatic preferences, active inference agent vs behavioral baseline
 - [x] **Grocery inventory AI** (`grocery_inventory_ai.ipynb`): parametric inventory
       simulator from 1000-SKU snapshot, order-up-to preference target
-      (S = d*(L+R) + z*sigma*sqrt(L+R)), active inference agent with adaptive
-      planning horizon and analytical step distribution, comparison vs classical
+      (S = d*(L+R) + z*sigma*sqrt(L+R)), proper active inference with VFE belief
+      updating (Kalman filter), KL-based EFE (Risk + Ambiguity - InfoGain + Stockout),
+      softmax policy selection, observation model P(o|s), comparison vs classical
       reorder-point (s,Q) baseline
 
 ### In Progress
-- [ ] **Mahault**: Active inference model on grocery dataset — binary daily order/hold
-      decision, EFE-based planning, compare against reorder-point baseline
 - [ ] **Jasmine**: Basic statistical / Monte Carlo baseline on grocery dataset —
       keep within demand std bounds, optimize stock levels given shipment uncertainty
 
