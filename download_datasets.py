@@ -3,10 +3,7 @@
 import kagglehub
 
 DATASETS = [
-    "datasetengineer/logistics-and-supply-chain-dataset",
-    "missionjee/car-sales-report",
     "mustofaahmad/inventory-management-grocery-industry",
-    "anirudhchauhan/retail-store-inventory-forecasting-dataset",
 ]
 
 def main():

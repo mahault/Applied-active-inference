@@ -2,15 +2,20 @@
 name = "applied-active-inference"
 version = "0.1.0"
 description = "Applied Active Inference experiments"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
-  { name = "Mahault Albarracin", email = "Mahault.Albarracin@gmail.com" }
+    { name = "Mahault Albarracin", email = "Mahault.Albarracin@gmail.com" },
+    { name = "Jasmine Moore", email = "jasmine@jamoo.dev" }
 ]
 dependencies = [
+    "ipykernel>=6.31.0",
     "kagglehub>=0.3.13",
+    "matplotlib",
     "numpy",
     "pandas",
-    "torch",
+    "scikit-learn",
+    "scipy",
+    "scipy-stubs~=1.17.1",
 ]
 classifiers = [
     "Private :: DO NOT UPLOAD"
